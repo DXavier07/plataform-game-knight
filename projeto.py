@@ -19,8 +19,23 @@ coin.y = 550
 game_over = False
 score = 0
 
+def skip():
+    # força o estado de game over de qualquer ponto do jogo
+    global game_over
+    game_over = True
+
 def update():
     global score, game_over
+
+    # se já for game over, não processa movimentação
+    if game_over:
+        return
+
+    # atalho para "pular" e forçar game over
+    if keyboard.k:
+        skip()
+        return
+
     if keyboard.a:
         player.x -= 5
     if keyboard.d:
@@ -42,7 +57,6 @@ def draw():
 
     if game_over:
         screen.draw.text('Game Over', (360, 300), color=(255,255,255), fontsize=60)
-        # skip.draw() removido porque 'skip' não está definido
         screen.draw.text('Final Score: ' + str(score), (360, 350), color=(255,255,255), fontsize=60)
 
 pgzrun.go()
