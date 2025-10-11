@@ -10,6 +10,21 @@ player = Actor('player_idle')
 player.x = 370
 player.y = 550
 
+#PLATAFORMA 1
+# criar múltiplas plataformas como Actors — não precisa de classes
+def make_platform(x, y, image):
+    p = Actor(image)
+    p.x = x
+    p.y = y
+    return p
+
+platforms = [
+    make_platform(150, 500, 'platform1'),
+    make_platform(400, 520, 'platform2'),
+    make_platform(600, 480, 'platform3'),
+    make_platform(300, 460, 'platform4'),
+]
+
 #COIN
 coin = Actor('coin_idle1')
 coin.x = 450
@@ -58,7 +73,19 @@ def update():
     if is_jumping:
         player.y += vy
         vy += GRAVITY
-        # aterrissagem
+        # colisão com plataformas (só quando caindo)
+        if vy > 0:
+            for p in platforms:
+                if player.colliderect(p):
+                    # calcula bordas para posicionar o jogador em cima da plataforma
+                    player_bottom = player.y + player.height/2
+                    platform_top = p.y - p.height/2
+                    if player_bottom <= platform_top + 6:  # tolerância pequena
+                        player.y = platform_top - player.height/2
+                        is_jumping = False
+                        vy = 0.0
+                        break
+        # aterrissagem no chão
         if player.y >= GROUND_Y:
             player.y = GROUND_Y
             is_jumping = False
@@ -83,6 +110,8 @@ def draw():
     screen.fill((80,0,70))
     player.draw()
     coin.draw()
+    for p in platforms:
+        p.draw()
     screen.draw.text('Score: ' + str(score), (15,10), color=(255,255,255), fontsize=30)
 
     if game_over:
