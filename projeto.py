@@ -69,7 +69,7 @@ def update():
         is_jumping = True
         vy = JUMP_VELOCITY
 
-    # aplicar física do pulo
+    # aplicar física do pulo quando estiver no ar
     if is_jumping:
         player.y += vy
         vy += GRAVITY
@@ -77,11 +77,10 @@ def update():
         if vy > 0:
             for p in platforms:
                 if player.colliderect(p):
-                    # calcula bordas para posicionar o jogador em cima da plataforma
-                    player_bottom = player.y + player.height/2
-                    platform_top = p.y - p.height/2
+                    player_bottom = player.y + player.height / 2
+                    platform_top = p.y - p.height / 2
                     if player_bottom <= platform_top + 6:  # tolerância pequena
-                        player.y = platform_top - player.height/2
+                        player.y = platform_top - player.height / 2
                         is_jumping = False
                         vy = 0.0
                         break
@@ -89,6 +88,21 @@ def update():
         if player.y >= GROUND_Y:
             player.y = GROUND_Y
             is_jumping = False
+            vy = 0.0
+    else:
+        # se não estiver pulando, verifica se ainda tem suporte (plataforma ou chão) abaixo
+        standing = False
+        player_bottom = player.y + player.height / 2
+        for p in platforms:
+            platform_top = p.y - p.height / 2
+            # checa se estamos praticamente em cima da plataforma e dentro dos limites horizontais
+            if abs(player_bottom - platform_top) <= 6:
+                if (player.x > p.x - p.width / 2) and (player.x < p.x + p.width / 2):
+                    standing = True
+                    break
+        # se não estiver em cima de nenhuma plataforma e não estiver no chão, começa a cair
+        if not standing and player.y < GROUND_Y:
+            is_jumping = True
             vy = 0.0
 
     # limitar jogador dentro da tela
