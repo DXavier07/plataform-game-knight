@@ -25,14 +25,12 @@ def frame_for_direction(name, facing):
     return name
 
 player = Actor('player_idle', (370, 550))
-coin = Actor('coin_idle1', (450, 550))
 
 game_over = False
 score = 0
 
 anim_state = 'idle'
 anim_index = anim_timer = 0
-FRAME_DELAY = 12
 jump_anim_index = 0
 
 GROUND_Y = 550
@@ -41,11 +39,17 @@ vy = 0.0
 JUMP_VELOCITY = -12.0
 GRAVITY = 0.6
 
+# --- MOEDAS FIXAS ---
+coin_positions = [
+    (150, 500), (250, 450), (350, 400), (450, 350), (550, 300),
+    (650, 250), (750, 200), (100, 350), (300, 300), (500, 250)
+]
+coins = [Actor('coin_idle1', pos=pos) for pos in coin_positions]
 coin_frames = ['coin_idle1', 'coin_idle2', 'coin_idle3', 'coin_idle4']
 coin_anim_index = coin_anim_timer = 0
 COIN_FRAME_DELAY = 12
 
-# --- NOVO SISTEMA DE PLATAFORMAS FIXAS ---
+# --- PLATAFORMAS ---
 PLATFORM_IMAGES = ['platform1', 'platform3']  # verde e amarelo
 FLOOR_SPACING = 90
 FLOORS = 5
@@ -57,21 +61,20 @@ def build_platforms(seed=None):
 
     plats = []
 
-    # cria o chão principal
+    # chão principal
     for i in range(0, WIDTH, tile_w):
         plats.append(Actor('platform1', (i + tile_w // 2, GROUND_Y)))
 
     # gera linhas de plataformas intercaladas
     for floor in range(1, FLOORS + 1):
         y = GROUND_Y - floor * FLOOR_SPACING
-        platform_type = PLATFORM_IMAGES[floor % 2]  # alterna verde/amarelo
+        platform_type = PLATFORM_IMAGES[floor % 2]
 
-        # número de grupos por linha
         group_count = 3 if floor % 2 == 0 else 4
         x_positions = [rng.randint(60, WIDTH - 200) for _ in range(group_count)]
 
         for x_start in x_positions:
-            length = rng.randint(3, 5)  # blocos por grupo
+            length = rng.randint(3, 5)
             for i in range(length):
                 x = x_start + i * tile_w
                 plats.append(Actor(platform_type, (x, y)))
@@ -156,25 +159,31 @@ def update():
 
     player.x = max(25, min(WIDTH - 25, player.x))
 
-    if player.colliderect(coin):
-        coin.x = random.randint(10, WIDTH - 10); coin.y = 550; score += 1
+    # --- COLETA DE MOEDAS ---
+    for c in coins[:]:
+        if player.colliderect(c):
+            coins.remove(c)
+            score += 1
+
     if score >= 10:
         game_over = True
 
+    # --- ANIMAÇÃO DO PLAYER ---
     anim_state = 'jump' if is_jumping else ('run' if moving else 'idle')
     anim_timer += 1
     if anim_state == 'idle':
-        if anim_timer >= FRAME_DELAY: anim_timer = 0; anim_index = (anim_index + 1) % len(idle_frames)
+        if anim_timer >= 12: anim_timer = 0; anim_index = (anim_index + 1) % len(idle_frames)
         base = idle_frames[anim_index]
     elif anim_state == 'run':
-        if anim_timer >= FRAME_DELAY: anim_timer = 0; anim_index = (anim_index + 1) % len(run_frames)
+        if anim_timer >= 12: anim_timer = 0; anim_index = (anim_index + 1) % len(run_frames)
         base = run_frames[anim_index]
     else:
-        if anim_timer >= FRAME_DELAY: anim_timer = 0; jump_anim_index = min(jump_anim_index + 1, len(jump_frames)-1)
+        if anim_timer >= 12: anim_timer = 0; jump_anim_index = min(jump_anim_index + 1, len(jump_frames)-1)
         base = jump_frames[jump_anim_index]
 
     player.image = frame_for_direction(base, facing)
 
+    # --- MONSTROS ---
     for m in monsters:
         a = m['actor']
         a.x += m['speed'] * m['dir']
@@ -188,11 +197,13 @@ def update():
         cur_frame = m['frames'][m['idx']]
         a.image = frame_for_direction(cur_frame, -1 if m['dir'] < 0 else 1)
 
+    # --- ANIMAÇÃO DAS MOEDAS ---
     coin_anim_timer += 1
     if coin_anim_timer >= COIN_FRAME_DELAY:
         coin_anim_timer = 0
         coin_anim_index = (coin_anim_index + 1) % len(coin_frames)
-        coin.image = coin_frames[coin_anim_index]
+        for c in coins:
+            c.image = coin_frames[coin_anim_index]
 
 def draw():
     screen.fill((80, 0, 70))
@@ -201,7 +212,8 @@ def draw():
     for m in monsters:
         m['actor'].draw()
     player.draw()
-    coin.draw()
+    for c in coins:
+        c.draw()
     screen.draw.text(f"Score: {score}", (15, 10), color="white", fontsize=30)
     if game_over:
         screen.draw.text("Game Over", (WIDTH // 2 - 80, HEIGHT // 2 - 20), color="white", fontsize=48)
