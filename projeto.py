@@ -3,82 +3,36 @@ import random
 import os
 import sys
 
-# TAMANHO DA TELA
-WIDTH = 800
-HEIGHT = 600
+WIDTH, HEIGHT = 800, 600
 
-# caminhos: resolve images de forma robusta (prioriza pasta junto ao script, depois cwd, depois argv[0])
-_IMAGE_DIR = None
-_candidates = [
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'images'),
-    os.path.join(os.getcwd(), 'images'),
-    os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), 'images'),
-]
-for _c in _candidates:
-    if os.path.isdir(_c):
-        _IMAGE_DIR = _c
-        break
+# images directory (script dir first, depois cwd)
+_script_images = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'images')
+_cwd_images = os.path.join(os.getcwd(), 'images')
+_IMAGE_DIR = _script_images if os.path.isdir(_script_images) else (_cwd_images if os.path.isdir(_cwd_images) else None)
 if _IMAGE_DIR is None:
-    print("ERROR: pasta 'images' não encontrada. Caminhos testados:")
-    for p in _candidates:
-        print("  -", p)
+    print("ERROR: pasta 'images' não encontrada. Verifique onde estão os PNGs.")
     sys.exit(1)
 
-# FRAMES DO PLAYER
 idle_frames = ['player_idle', 'player_idle1', 'player_idle2', 'player_idle3']
 run_frames = ['player_run1', 'player_run2', 'player_run3', 'player_run4']
 jump_frames = ['player_jumping1', 'player_jumping2', 'player_jumping3', 'player_jumping4']
 
-def frame_for_direction(frame_name, facing):
-    """
-    Retorna "<frame>_left" se facing == -1 e o arquivo existir,
-    caso contrário encerra o jogo (exit) para facilitar teste.
-    Adiciona prints de debug (apenas na primeira chamada) e
-    mostra a checagem para cada frame pedido.
-    """
-    global _IMAGE_DIR
-    # imprime debug da pasta e arquivos só na primeira chamada
-    if not globals().get('_frame_debug_printed'):
-        try:
-            files = sorted(os.listdir(_IMAGE_DIR))
-        except Exception as e:
-            print("ERROR: não consegui listar _IMAGE_DIR:", _IMAGE_DIR, "->", e)
-            sys.exit(1)
-        print("DEBUG: _IMAGE_DIR =", os.path.abspath(_IMAGE_DIR))
-        print("DEBUG: imagens disponíveis:", files)
-        globals()['_frame_debug_printed'] = True
-
+def frame_for_direction(name, facing):
     if facing == -1:
-        left = frame_name + '_left'
-        left_path = os.path.join(_IMAGE_DIR, left + '.png')
-        exists = os.path.isfile(left_path)
-        print(f"DEBUG: procurando left sprite for '{frame_name}': {left_path} -> exists={exists}")
-        if exists:
-            return left
-        # não encontrou: imprime caminho esperado e encerra para teste
-        print(f"ERROR: left sprite not found for '{frame_name}'. Expected: {left_path}")
-        sys.exit(1)
-    return frame_name
+        cand = name + '_left'
+        if os.path.isfile(os.path.join(_IMAGE_DIR, cand + '.png')):
+            return cand
+    return name
 
-# PERSONAGEM
-player = Actor('player_idle')
-player.x = 370
-player.y = 550
+player = Actor('player_idle', (370, 550))
+coin = Actor('coin_idle1', (450, 550))
 
-# COIN
-coin = Actor('coin_idle1')
-coin.x = 450
-coin.y = 550
-
-# VARIAVEIS GLOBAIS
 game_over = False
 score = 0
 
-# ANIMAÇÃO E PULO
-anim_state = 'idle'     # 'idle', 'run', 'jump'
-anim_index = 0
-anim_timer = 0
-FRAME_DELAY = 12   # mais lento
+anim_state = 'idle'
+anim_index = anim_timer = 0
+FRAME_DELAY = 14
 jump_anim_index = 0
 
 GROUND_Y = 550
@@ -87,145 +41,117 @@ vy = 0.0
 JUMP_VELOCITY = -12.0
 GRAVITY = 0.6
 
-# MOEDA
 coin_frames = ['coin_idle1', 'coin_idle2', 'coin_idle3', 'coin_idle4']
-coin_anim_index = 0
-coin_anim_timer = 0
-COIN_FRAME_DELAY = 12  # mais lento
-
-# PLATAFORMAS (Actors simples)
-def make_platform(x, y, image):
-    p = Actor(image)
-    p.x = x
-    p.y = y
-    return p
+coin_anim_index = coin_anim_timer = 0
+COIN_FRAME_DELAY = 14
 
 platforms = [
-    make_platform(150, 500, 'platform1'),
-    make_platform(400, 520, 'platform2'),
-    make_platform(600, 480, 'platform3'),
-    make_platform(300, 460, 'platform4'),
+    Actor('platform1', (150, 500)),
+    Actor('platform2', (400, 520)),
+    Actor('platform3', (600, 480)),
+    Actor('platform4', (300, 460)),
 ]
 
-# 1 = right, -1 = left
-facing = 1
+# --- monsters: frames, instâncias e parâmetros de movimento/anim ---
+monster_frames = {
+    'm1': ['monster1_run', 'monster1_run2', 'monster1_run3', 'monster1_run4'],
+    'm2': ['monster2_run', 'monster2_run2', 'monster2_run3', 'monster2_run4'],
+}
+monsters = [
+    # monster1 patrulha entre 100..350
+    {'actor': Actor(monster_frames['m1'][0], (220, 520)),
+     'frames': monster_frames['m1'], 'idx': 0, 'timer': 0, 'delay': 12,
+     'dir': 1, 'speed': 1.2, 'min_x': 100, 'max_x': 350},
+    # monster2 patrulha entre 500..750
+    {'actor': Actor(monster_frames['m2'][0], (620, 500)),
+     'frames': monster_frames['m2'], 'idx': 0, 'timer': 0, 'delay': 14,
+     'dir': -1, 'speed': 1.0, 'min_x': 500, 'max_x': 750},
+]
 
-def skip():
-    global game_over
-    game_over = True
+facing = 1  # 1=right, -1=left
 
 def update():
-    global score, game_over, is_jumping, vy, facing
+    global game_over, score, is_jumping, vy, facing
     global anim_state, anim_index, anim_timer, jump_anim_index
     global coin_anim_index, coin_anim_timer
 
     if game_over:
         return
-
     if keyboard.k:
-        skip()
+        game_over = True
         return
 
-    # MOVIMENTO HORIZONTAL (A/D ou setas)
     moving = False
     if keyboard.a or keyboard.left:
-        player.x -= 5
-        moving = True
-        facing = -1
+        player.x -= 5; moving = True; facing = -1
     elif keyboard.d or keyboard.right:
-        player.x += 5
-        moving = True
-        facing = 1
+        player.x += 5; moving = True; facing = 1
 
-    # INICIAR PULO
     if keyboard.space and not is_jumping:
-        is_jumping = True
-        vy = JUMP_VELOCITY
-        jump_anim_index = 0
-        anim_timer = 0
+        is_jumping = True; vy = JUMP_VELOCITY; jump_anim_index = 0; anim_timer = 0
 
-    # FISICA DO PULO
     if is_jumping:
-        player.y += vy
-        vy += GRAVITY
-
-        # colisão com plataformas (apenas ao descer)
+        player.y += vy; vy += GRAVITY
         if vy > 0:
             for p in platforms:
                 if player.colliderect(p):
-                    player_bottom = player.y + player.height / 2
-                    platform_top = p.y - p.height / 2
-                    if player_bottom <= platform_top + 6:
-                        player.y = platform_top - player.height / 2
-                        is_jumping = False
-                        vy = 0.0
-                        jump_anim_index = 0
+                    pb = player.y + player.height/2
+                    pt = p.y - p.height/2
+                    if pb <= pt + 6:
+                        player.y = pt - player.height/2
+                        is_jumping = False; vy = 0.0; jump_anim_index = 0
                         break
-
-        # aterrissagem no chão
         if player.y >= GROUND_Y:
-            player.y = GROUND_Y
-            is_jumping = False
-            vy = 0.0
-            jump_anim_index = 0
+            player.y = GROUND_Y; is_jumping = False; vy = 0.0; jump_anim_index = 0
     else:
-        # verifica suporte (plataformas ou chão); se saiu da plataforma começa a cair
         standing = False
-        player_bottom = player.y + player.height / 2
+        pb = player.y + player.height/2
         for p in platforms:
-            platform_top = p.y - p.height / 2
-            if abs(player_bottom - platform_top) <= 6:
-                if (player.x > p.x - p.width / 2) and (player.x < p.x + p.width / 2):
-                    standing = True
-                    break
+            pt = p.y - p.height/2
+            if abs(pb - pt) <= 6 and (player.x > p.x - p.width/2) and (player.x < p.x + p.width/2):
+                standing = True; break
         if not standing and player.y < GROUND_Y:
-            is_jumping = True
-            vy = 0.0
+            is_jumping = True; vy = 0.0
 
-    # LIMITES HORIZONTAIS
-    if player.x < 25:
-        player.x = 25
-    if player.x > WIDTH - 25:
-        player.x = WIDTH - 25
+    player.x = max(25, min(WIDTH - 25, player.x))
 
-    # COLISÃO COM MOEDA
     if player.colliderect(coin):
-        coin.x = random.randint(10, WIDTH - 10)
-        coin.y = 550
-        score += 1
-
+        coin.x = random.randint(10, WIDTH - 10); coin.y = 550; score += 1
     if score >= 10:
         game_over = True
 
-    # ANIMAÇÃO DO PLAYER
-    if is_jumping:
-        anim_state = 'jump'
-    elif moving:
-        anim_state = 'run'
-    else:
-        anim_state = 'idle'
-
+    anim_state = 'jump' if is_jumping else ('run' if moving else 'idle')
     anim_timer += 1
     if anim_state == 'idle':
-        if anim_timer >= FRAME_DELAY:
-            anim_timer = 0
-            anim_index = (anim_index + 1) % len(idle_frames)
-        base_frame = idle_frames[anim_index]
+        if anim_timer >= FRAME_DELAY: anim_timer = 0; anim_index = (anim_index + 1) % len(idle_frames)
+        base = idle_frames[anim_index]
     elif anim_state == 'run':
-        if anim_timer >= FRAME_DELAY:
-            anim_timer = 0
-            anim_index = (anim_index + 1) % len(run_frames)
-        base_frame = run_frames[anim_index]
-    else:  # jump
-        if anim_timer >= FRAME_DELAY:
-            anim_timer = 0
-            jump_anim_index = min(jump_anim_index + 1, len(jump_frames) - 1)
-        base_frame = jump_frames[jump_anim_index]
+        if anim_timer >= FRAME_DELAY: anim_timer = 0; anim_index = (anim_index + 1) % len(run_frames)
+        base = run_frames[anim_index]
+    else:
+        if anim_timer >= FRAME_DELAY: anim_timer = 0; jump_anim_index = min(jump_anim_index + 1, len(jump_frames)-1)
+        base = jump_frames[jump_anim_index]
 
-    # usa versão "_left" se existir e estivermos virados para a esquerda
-    player.image = frame_for_direction(base_frame, facing)
+    player.image = frame_for_direction(base, facing)
 
-    # ANIMAÇÃO DA MOEDA
+    # --- animate & move monsters ---
+    for m in monsters:
+        a = m['actor']
+        # move and clamp / reverse direction
+        a.x += m['speed'] * m['dir']
+        if a.x <= m['min_x']:
+            a.x = m['min_x']; m['dir'] = 1
+        elif a.x >= m['max_x']:
+            a.x = m['max_x']; m['dir'] = -1
+        # animation timer
+        m['timer'] += 1
+        if m['timer'] >= m['delay']:
+            m['timer'] = 0
+            m['idx'] = (m['idx'] + 1) % len(m['frames'])
+        # set frame; use frame_for_direction so "<frame>_left" is used if present
+        cur_frame = m['frames'][m['idx']]
+        a.image = frame_for_direction(cur_frame, -1 if m['dir'] < 0 else 1)
+
     coin_anim_timer += 1
     if coin_anim_timer >= COIN_FRAME_DELAY:
         coin_anim_timer = 0
@@ -234,14 +160,12 @@ def update():
 
 def draw():
     screen.fill((80,0,70))
-    for p in platforms:
-        p.draw()
-    player.draw()
-    coin.draw()
-    screen.draw.text('Score: ' + str(score), (15,10), color=(255,255,255), fontsize=30)
-
+    for p in platforms: p.draw()
+    for m in monsters: m['actor'].draw()
+    player.draw(); coin.draw()
+    screen.draw.text(f"Score: {score}", (15,10), color="white", fontsize=30)
     if game_over:
-        screen.draw.text('Game Over', (360, 300), color=(255,255,255), fontsize=60)
-        screen.draw.text('Final Score: ' + str(score), (360, 350), color=(255,255,255), fontsize=60)
+        screen.draw.text("Game Over", (360,300), color="white", fontsize=60)
+        screen.draw.text(f"Final Score: {score}", (360,350), color="white", fontsize=40)
 
 pgzrun.go()
