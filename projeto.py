@@ -6,7 +6,7 @@ WIDTH = 800
 HEIGHT = 600
 
 #PERSONAGEM
-player = Actor('player_idle')  # removido .png (pgzero usa nome do recurso)
+player = Actor('player_idle')
 player.x = 370
 player.y = 550
 
@@ -19,13 +19,20 @@ coin.y = 550
 game_over = False
 score = 0
 
+# VARIAVEIS DE PULO
+GROUND_Y = 550
+is_jumping = False
+vy = 0.0
+JUMP_VELOCITY = -12.0
+GRAVITY = 0.6
+
 def skip():
     # força o estado de game over de qualquer ponto do jogo
     global game_over
     game_over = True
 
 def update():
-    global score, game_over
+    global score, game_over, is_jumping, vy
 
     # se já for game over, não processa movimentação
     if game_over:
@@ -36,11 +43,34 @@ def update():
         skip()
         return
 
+    # movimento horizontal
     if keyboard.a:
         player.x -= 5
     if keyboard.d:
         player.x += 5
 
+    # iniciar pulo com Espaço (sem duplo pulo)
+    if keyboard.space and not is_jumping:
+        is_jumping = True
+        vy = JUMP_VELOCITY
+
+    # aplicar física do pulo
+    if is_jumping:
+        player.y += vy
+        vy += GRAVITY
+        # aterrissagem
+        if player.y >= GROUND_Y:
+            player.y = GROUND_Y
+            is_jumping = False
+            vy = 0.0
+
+    # limitar jogador dentro da tela
+    if player.x < 25:
+        player.x = 25
+    if player.x > WIDTH - 25:
+        player.x = WIDTH - 25
+
+    # colisão com coin
     if player.colliderect(coin):
         coin.x = random.randint(10, WIDTH - 10)
         score += 1
