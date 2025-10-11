@@ -24,11 +24,18 @@ idle_frames = ['player_idle', 'player_idle1', 'player_idle2', 'player_idle3']
 run_frames = ['player_run1', 'player_run2', 'player_run3', 'player_run4']
 jump_frames = ['player_jumping1', 'player_jumping2', 'player_jumping3', 'player_jumping4']
 
-anim_state = 'idle'       # 'idle', 'run', 'jump'
+# --- inicialização da animação (adicionar isto) ---
+anim_state = 'idle'     # 'idle', 'run', 'jump'
 anim_index = 0
 anim_timer = 0
-FRAME_DELAY = 5           # frames do jogo por troca de sprite
+FRAME_DELAY = 5         # ajuste para acelerar/retardar animação
 jump_anim_index = 0
+
+# ANIMAÇÃO DA MOEDA
+coin_frames = ['coin_idle1', 'coin_idle2', 'coin_idle3', 'coin_idle4']
+coin_anim_index = 0
+coin_anim_timer = 0
+COIN_FRAME_DELAY = 7
 
 # VARIAVEIS DE PULO
 GROUND_Y = 550
@@ -59,6 +66,7 @@ def skip():
 def update():
     global score, game_over, is_jumping, vy
     global anim_state, anim_index, anim_timer, jump_anim_index
+    global coin_anim_index, coin_anim_timer
 
     # se já for game over, não processa movimentação
     if game_over:
@@ -164,6 +172,13 @@ def update():
             anim_timer = 0
             jump_anim_index = min(jump_anim_index + 1, len(jump_frames) - 1)
         player.image = jump_frames[jump_anim_index]
+
+    # animação da moeda
+    coin_anim_timer += 1
+    if coin_anim_timer >= COIN_FRAME_DELAY:
+        coin_anim_timer = 0
+        coin_anim_index = (coin_anim_index + 1) % len(coin_frames)
+        coin.image = coin_frames[coin_anim_index]
 
 def draw():
     screen.fill((80,0,70))
