@@ -5,7 +5,7 @@ import sys
 
 WIDTH, HEIGHT = 800, 600
 
-# images directory (script dir first, depois cwd)
+# images directory
 _script_images = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'images')
 _cwd_images = os.path.join(os.getcwd(), 'images')
 _IMAGE_DIR = _script_images if os.path.isdir(_script_images) else (_cwd_images if os.path.isdir(_cwd_images) else None)
@@ -32,7 +32,7 @@ score = 0
 
 anim_state = 'idle'
 anim_index = anim_timer = 0
-FRAME_DELAY = 14
+FRAME_DELAY = 12
 jump_anim_index = 0
 
 GROUND_Y = 550
@@ -43,32 +43,73 @@ GRAVITY = 0.6
 
 coin_frames = ['coin_idle1', 'coin_idle2', 'coin_idle3', 'coin_idle4']
 coin_anim_index = coin_anim_timer = 0
-COIN_FRAME_DELAY = 14
+COIN_FRAME_DELAY = 12
 
-platforms = [
-    Actor('platform1', (150, 500)),
-    Actor('platform2', (400, 520)),
-    Actor('platform3', (600, 480)),
-    Actor('platform4', (300, 460)),
-]
+# --- NOVO SISTEMA DE PLATAFORMAS FIXAS ---
+PLATFORM_IMAGES = ['platform1', 'platform3']  # verde e amarelo
+FLOOR_SPACING = 90
+FLOORS = 5
 
-# --- monsters: frames, instâncias e parâmetros de movimento/anim ---
+def build_platforms(seed=None):
+    rng = random.Random(0)
+    sample = Actor(PLATFORM_IMAGES[0])
+    tile_w, tile_h = sample.width, sample.height
+
+    plats = []
+
+    # cria o chão principal
+    for i in range(0, WIDTH, tile_w):
+        plats.append(Actor('platform1', (i + tile_w // 2, GROUND_Y)))
+
+    # gera linhas de plataformas intercaladas
+    for floor in range(1, FLOORS + 1):
+        y = GROUND_Y - floor * FLOOR_SPACING
+        platform_type = PLATFORM_IMAGES[floor % 2]  # alterna verde/amarelo
+
+        # número de grupos por linha
+        group_count = 3 if floor % 2 == 0 else 4
+        x_positions = [rng.randint(60, WIDTH - 200) for _ in range(group_count)]
+
+        for x_start in x_positions:
+            length = rng.randint(3, 5)  # blocos por grupo
+            for i in range(length):
+                x = x_start + i * tile_w
+                plats.append(Actor(platform_type, (x, y)))
+
+    return plats
+
+platforms = build_platforms()
+
+# --- MONSTROS ---
 monster_frames = {
     'm1': ['monster1_run', 'monster1_run2', 'monster1_run3', 'monster1_run4'],
     'm2': ['monster2_run', 'monster2_run2', 'monster2_run3', 'monster2_run4'],
 }
-monsters = [
-    # monster1 patrulha entre 100..350
-    {'actor': Actor(monster_frames['m1'][0], (220, 520)),
-     'frames': monster_frames['m1'], 'idx': 0, 'timer': 0, 'delay': 12,
-     'dir': 1, 'speed': 1.2, 'min_x': 100, 'max_x': 350},
-    # monster2 patrulha entre 500..750
-    {'actor': Actor(monster_frames['m2'][0], (620, 500)),
-     'frames': monster_frames['m2'], 'idx': 0, 'timer': 0, 'delay': 14,
-     'dir': -1, 'speed': 1.0, 'min_x': 500, 'max_x': 750},
-]
+monsters = []
 
-facing = 1  # 1=right, -1=left
+levels = {}
+for p in platforms:
+    ly = int(round(p.y / 4) * 4)
+    levels.setdefault(ly, []).append(p)
+
+rows = sorted([ly for ly in levels.keys() if ly >= 100])
+sel_rows = rows[1::2][:3]
+for idx, ly in enumerate(sel_rows):
+    lvl = levels[ly]
+    xs = sorted(p.x for p in lvl)
+    min_x = max(40, int(min(xs) - 30))
+    max_x = min(WIDTH - 40, int(max(xs) + 30))
+    y = int(sum(p.y for p in lvl) / len(lvl)) - 20
+    mtype = 'm1' if idx % 2 == 0 else 'm2'
+    frames = monster_frames[mtype]
+    monsters.append({
+        'actor': Actor(frames[0], ((min_x + max_x) // 2, y)),
+        'frames': frames, 'idx': 0, 'timer': 0, 'delay': 12 + idx * 2,
+        'dir': -1 if idx % 2 else 1, 'speed': 1.0 + idx * 0.3,
+        'min_x': min_x, 'max_x': max_x
+    })
+
+facing = 1
 
 def update():
     global game_over, score, is_jumping, vy, facing
@@ -134,21 +175,16 @@ def update():
 
     player.image = frame_for_direction(base, facing)
 
-    # --- animate & move monsters ---
     for m in monsters:
         a = m['actor']
-        # move and clamp / reverse direction
         a.x += m['speed'] * m['dir']
         if a.x <= m['min_x']:
             a.x = m['min_x']; m['dir'] = 1
         elif a.x >= m['max_x']:
             a.x = m['max_x']; m['dir'] = -1
-        # animation timer
         m['timer'] += 1
         if m['timer'] >= m['delay']:
-            m['timer'] = 0
-            m['idx'] = (m['idx'] + 1) % len(m['frames'])
-        # set frame; use frame_for_direction so "<frame>_left" is used if present
+            m['timer'] = 0; m['idx'] = (m['idx'] + 1) % len(m['frames'])
         cur_frame = m['frames'][m['idx']]
         a.image = frame_for_direction(cur_frame, -1 if m['dir'] < 0 else 1)
 
@@ -159,13 +195,16 @@ def update():
         coin.image = coin_frames[coin_anim_index]
 
 def draw():
-    screen.fill((80,0,70))
-    for p in platforms: p.draw()
-    for m in monsters: m['actor'].draw()
-    player.draw(); coin.draw()
-    screen.draw.text(f"Score: {score}", (15,10), color="white", fontsize=30)
+    screen.fill((80, 0, 70))
+    for p in platforms:
+        p.draw()
+    for m in monsters:
+        m['actor'].draw()
+    player.draw()
+    coin.draw()
+    screen.draw.text(f"Score: {score}", (15, 10), color="white", fontsize=30)
     if game_over:
-        screen.draw.text("Game Over", (360,300), color="white", fontsize=60)
-        screen.draw.text(f"Final Score: {score}", (360,350), color="white", fontsize=40)
+        screen.draw.text("Game Over", (WIDTH // 2 - 80, HEIGHT // 2 - 20), color="white", fontsize=48)
+        screen.draw.text(f"Final Score: {score}", (WIDTH // 2 - 80, HEIGHT // 2 + 30), color="white", fontsize=28)
 
 pgzrun.go()
