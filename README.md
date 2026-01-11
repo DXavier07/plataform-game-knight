@@ -1,10 +1,10 @@
-# ⚔️ Knight's Quest: Slime Hunter
+# ⚔️ plataform game knight
 
 ![Status](https://img.shields.io/badge/Status-Em_Desenvolvimento-yellow)
 ![Python](https://img.shields.io/badge/Python-3.x-blue?logo=python)
 ![Pygame](https://img.shields.io/badge/Lib-Pygame-green?logo=python)
 
-Um jogo de plataforma clássico 2D desenvolvido em **Python**. O objetivo é controlar o cavaleiro, enfrentar inimigos (slimes) e superar obstáculos em um cenário desafiador.
+Um jogo de plataforma clássico 2D desenvolvido em **Python**. O objetivo é controlar o cavaleiro, enfrentar inimigos (slimes) e superar obstáculos em um cenário nada desafiadorkkkkkkk.
 
 Este projeto foi desenvolvido para prática de lógica de programação, orientação a objetos e manipulação de eventos gráficos.
 
@@ -25,7 +25,7 @@ Este projeto foi desenvolvido para prática de lógica de programação, orienta
 O objetivo é chegar ao final do nível sem perder toda a vida. Cuidado com os Slimes!
 
 ### Controles
-*(Verifique se as teclas batem com seu código, se não, edite aqui)*
+
 
 | Tecla | Ação |
 | :---: | :--- |
